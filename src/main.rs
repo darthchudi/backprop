@@ -1,4 +1,4 @@
-use backprop::{network, value};
+use backprop::{network};
 
 fn main (){
     // 3 layer network.

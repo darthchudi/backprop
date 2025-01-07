@@ -1,8 +1,14 @@
 use rand::Rng;
+use crate::value::Value;
+
+// Weight represents the default weights type of float64 numbers
+// wrapped within the Value type.
+type Weight = Value<f64>;
+type Bias = Weight;
 
 pub struct Neuron {
-    weights: Vec<f64>,
-    bias: f64
+    weights: Vec<Weight>,
+    bias: Bias,
 }
 
 // Neuron represents a single neuron with a given weight and bias value
@@ -11,13 +17,16 @@ impl Neuron {
         let mut weights_rng = rand::thread_rng();
         let mut bias_rng = rand::thread_rng();
 
-        let mut weights: Vec<f64> = Vec::with_capacity(inputs as usize);
+        let mut weights: Vec<Value<f64>> = Vec::with_capacity(inputs as usize);
         for _ in 0..inputs {
-            let weight = weights_rng.gen_range(-1.0..=1.0);
+            let raw_weight = weights_rng.gen_range(-1.0..=1.0);
+           let weight = Value::new(raw_weight);
+
             weights.push(weight);
         }
 
-        let bias = bias_rng.gen_range(-0.01..=0.01);
+        let raw_bias = bias_rng.gen_range(-0.01..=0.01);
+        let bias = Value::new(raw_bias);
 
         Neuron {
             weights,
@@ -31,7 +40,7 @@ impl Neuron {
 
     // Performs the forward pass on a given input and returns the activation
     fn forward(&self, x: &Vec<f64>) -> f64 {
-        let mut weight_sum = 0.0;
+        let mut weight_sum = Value::new(0.0);
 
         if x.len() != self.weights.len() {
             panic!("{}", format!("{} input dimensions not compatible with {} weight dimensions", x.len(), self.weights.len()));
@@ -39,13 +48,13 @@ impl Neuron {
 
         // Compute the weighted sum of inputs for the neuron.
         for (index, input_val) in x.iter().enumerate() {
-            let computed_val = self.weights[index]  * input_val;  // Wi * Xi
-            weight_sum += computed_val; // Sum(WnXn)
+            let computed_val = self.weights[index]  * Value::new_from_ref(input_val);  // Wi * Xi
+            weight_sum = weight_sum + computed_val; // Sum(WnXn)
         }
 
         let weight_and_bias = weight_sum + self.bias;
 
-        let activation = Neuron::relu(weight_and_bias);
+        let activation = Neuron::relu(weight_and_bias.val());
 
         activation
     }
