@@ -3,48 +3,6 @@ use std::fmt;
 use std::rc::Rc;
 use std::cell::RefCell;
 
-
-
-// BackwardPassFn represents a function which when called on a value, computes
-// the differential of the value relative to its inputs.
-// type BackwardPassFn = dyn FnOnce() -> Result<(), String>;
-
-// Value represents a numeric type used for mathematical operations
-// It tracks and stores the gradients for operations which occur on the Value
-// pub struct Value<T> {
-//     pub data: T,
-//     children: Vec<Rc<Value<T>>>,
-//     gradient: f64,
-//     _backward: Option<Box<BackwardPassFn>>,
-//     symbol: &'static str,
-// }
-
-// impl<T> Clone for Value<T> {
-//     fn clone(&self) -> Self {
-//         Self {
-//             data: *self.data,
-//             children: self.children.clone(),
-//             gradient: 0.0,
-//             _backward: None,
-//             symbol: "",
-//         }
-//     }
-// }
-
-
-#[derive(Clone)]
-pub struct CloneableFn {
-    inner: Rc<Box<dyn FnMut()>>,
-}
-
-impl CloneableFn {
-    pub fn new<F: FnMut() + 'static>(f: F) -> Self {
-        Self {
-            inner: Rc::new(Box::new(f)),
-        }
-    }
-}
-
 // InnerValue represents the inner contents of a Value object in a computation graph.
 // A given InnerValue will have references to the nodes which created it.
 // By maintaining a reference to its ancestors and only generating the gradients when the backward
@@ -64,9 +22,7 @@ pub struct InnerValue<T> {
 
     // ancestors refers to the values (nodes) which are passed as inputs to this node
     // the relationship might be inverted here for modelling reasons, which I'll be exploring further.
-    pub ancestors: Vec<Value<T>>,
-
-    pub ancestors_rc: Vec<Rc<RefCell<InnerValue<T>>>>,
+    pub ancestors: Vec<Rc<RefCell<InnerValue<T>>>>,
 
     // gradient is the gradient of this value relative to it's "parent" nodes
     // i.e for an equation y = 1 + x.
@@ -80,13 +36,11 @@ pub struct InnerValue<T> {
     pub symbol: &'static str,
 }
 
-
 impl<T: fmt::Debug> fmt::Debug for InnerValue<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("InnerValue")
             .field("data", &self.data)
             .field("ancestors", &self.ancestors)
-            .field("ancestors_rc", &self.ancestors_rc)
             .field("gradient", &self.gradient)
             .field("symbol", &self.symbol)
             .finish()
@@ -111,7 +65,6 @@ impl<T: Copy> Value<T> {
             data,
             gradient: 0.0,
             ancestors: vec![],
-            ancestors_rc: vec![],
             symbol: "",
         };
 
@@ -126,50 +79,46 @@ impl<T: Copy> Value<T> {
                 let left_ancestor = &val.ancestors[0];
                 let right_ancestor = &val.ancestors[1];
                 
-                println!("{}", left_ancestor.borrow().gradient);
 
-                left_ancestor.borrow_mut().gradient += 1.0;
-                right_ancestor.borrow_mut().gradient += 1.0;
-
-                println!("{}", left_ancestor.borrow().gradient);
-
-                println!("Added!")
+                left_ancestor.borrow_mut().gradient += 1.0 * val.gradient;
+                right_ancestor.borrow_mut().gradient += 1.0 * val.gradient;
+                
+                println!("Addition backward pass!")
             },
+            "-" => {
+                let left_ancestor = &val.ancestors[0];
+                let right_ancestor = &val.ancestors[1];
+
+                left_ancestor.borrow_mut().gradient += 1.0 * val.gradient;
+                right_ancestor.borrow_mut().gradient += 1.0 * val.gradient;
+
+                println!("Subtraction backward pass!")
+            }
+            "*" => {
+                let left_ancestor = &val.ancestors[0];
+                let right_ancestor = &val.ancestors[1];
+
+                left_ancestor.borrow_mut().gradient += right_ancestor.borrow().data * val.gradient;
+                right_ancestor.borrow_mut().gradient += left_ancestor.borrow().data * val.gradient;
+
+                println!("Subtraction backward pass!")
+            }
             _ => ()
         }
-
+    }
+    
+    pub fn get_data(&self) -> T {
+        self.borrow().data
+    }
+    
+    pub fn get_gradient(&self) -> f64 {
+        self.borrow().gradient
+    }
+    
+    pub fn set_gradient(&self, gradient: f64) {
+        self.borrow_mut().gradient = gradient;
     }
 }
-
-
-// impl<T: Copy> Value<T> {
-//     pub fn new(data: T) -> Value<T> {
-//         Value { data, children: vec![], gradient: 0.0, _backward: None, symbol: ""}
-//     }
-//
-//     pub fn new_from_ref(data: &T) -> Value<T> {
-//         Value { data: *data, children: vec![], gradient: 0.0, _backward: None, symbol: "" }
-//     }
-//
-//     pub fn val(&self) -> T {
-//         self.data
-//     }
-// }
-
-// impl<T: Add<Output=T>> Add for Value<T> {
-//     type Output = Self;
-//
-//     fn add(self, rhs: Self) -> Self::Output {
-//         let result =  self.data + rhs.data;
-//         let mut value = Value::new(result);
-//
-//         value.children.append(vec![Rc::clone(self), Rc::clone(rhs)]);
-//
-//         let backward = || {
-//
-//         };
-//     }
-// }
 
 impl<T: Add<Output=T> + Copy + 'static> Add for Value<T> {
     type Output = Self;
@@ -179,55 +128,69 @@ impl<T: Add<Output=T> + Copy + 'static> Add for Value<T> {
         let value = Value::new(result);
 
         // Set a reference to the ancestors
-        let mut ancestors = vec![self.clone(), rhs.clone()];
+        let mut ancestors = vec![Rc::clone(&self), Rc::clone(&rhs)];
         value.borrow_mut().ancestors.append(&mut ancestors);
 
-        value.borrow_mut().symbol = "+";
-
-        let ancestors_clone = value.borrow().ancestors.clone();
-
-        let left_ancestor = value.borrow().ancestors[0].clone();
-        let right_ancestor = value.borrow().ancestors[0].clone();
-
-        let _ = move || {
-            left_ancestor.borrow_mut().gradient += 1.0;
-            right_ancestor.borrow_mut().gradient += 1.0;
-        };
-
-    //    value.borrow_mut()._backward = CloneableFn::new(backward);
-
-       value
-    }
-}
-
-impl<'a, T: Add<Output=T> + Copy + 'static> Add for &'a Value<T> {
-    type Output = Value<T>;
-
-    fn add(self, rhs:  Self) -> Self::Output {
-        let result =  self.borrow().data + rhs.borrow().data;
-        let value = Value::new(result);
-
-        // Set a reference to the ancestors
-        let mut ancestors = vec![self.clone(), rhs.clone()];
-        value.borrow_mut().ancestors.append(&mut ancestors);
-
-        // Store information about the symbol
         value.borrow_mut().symbol = "+";
         
         value
     }
 }
 
-//
-// impl<T: Sub<Output=T>> Sub for Value<T> {
-//     type Output = Self;
-//
-//     fn sub(self, rhs: Self) -> Self::Output {
-//         let result =  self.data - rhs.data;
-//
-//         Value::new(result)
-//     }
-// }
+impl<T: Add<Output=T> + Copy + 'static> Add for &Value<T> {
+    type Output = Value<T>;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        let result =  self.borrow().data + rhs.borrow().data;
+        let value = Value::new(result);
+
+        // Set a reference to the ancestors
+        let mut ancestors = vec![Rc::clone(&self), Rc::clone(&rhs)];
+        value.borrow_mut().ancestors.append(&mut ancestors);
+
+        value.borrow_mut().symbol = "+";
+
+        value
+    }
+}
+
+
+impl<T: Sub<Output=T> + Copy + 'static> Sub for Value<T> {
+    type Output = Self;
+
+    fn sub(self, rhs: Self) -> Self::Output {
+        let result =  self.borrow().data - rhs.borrow().data;
+        let value = Value::new(result);
+
+        // Set a reference to the ancestors
+        let mut ancestors = vec![Rc::clone(&self), Rc::clone(&rhs)];
+        value.borrow_mut().ancestors.append(&mut ancestors);
+
+        value.borrow_mut().symbol = "-";
+
+        value
+    }
+}
+
+
+impl<T: Sub<Output=T> + Copy + 'static> Sub for &Value<T> {
+    type Output = Value<T>;
+
+    fn sub(self, rhs: Self) -> Self::Output {
+        let result =  self.borrow().data - rhs.borrow().data;
+        let value = Value::new(result);
+
+        // Set a reference to the ancestors
+        let mut ancestors = vec![Rc::clone(&self), Rc::clone(&rhs)];
+        value.borrow_mut().ancestors.append(&mut ancestors);
+
+        value.borrow_mut().symbol = "-";
+
+        value
+    }
+}
+
+
 //
 // impl<T: Mul<Output=T>> Mul for Value<T> {
 //     type Output = Self;
@@ -270,35 +233,103 @@ mod tests {
     use std::rc::Rc;
 
     #[test]
-    fn arithmetic_ops_on_values(){
+    fn simple_addition_on_values(){
+        // Initial addition
+        let x = Value::new(1);
+        let w = Value::new(2);
+
+        // Get a reference of x to assert on the gradient later
+        let x_clone = x.clone();
+
+        let y = x + w;
+        assert_eq!(y.get_data(), 3);
+
+        // Get a reference to y to perform the backward pass
+        let y_clone = y.clone();
+
+        // Subsequent addition
+        let z = y + Value::new(10);
+        assert_eq!(z.get_data(), 13);
+
+        // Set the gradient for z and calculate the gradient
+        // We start from z as it's the root node.
+        z.set_gradient(1.0);
+        
+        // Todo call in topological order
+        z.backward();
+        y_clone.backward();
+
+        assert_eq!(x_clone.borrow().gradient, 1.0);
+        assert_eq!(y_clone.borrow().gradient, 1.0);
+    }
+
+    #[test]
+    fn addition_references(){
         let x = &Value::new(1);
         let w = &Value::new(2);
-        
+
         let y = x + w;
+
+        let z = &y + &Value::new(10);
+
+        z.set_gradient(1.0);
+
+        z.backward();
+        y.backward();
+
+        println!("⭐️ {:?}", z);
+        println!("⭐️ {:?}", y);
+
+        println!("dz/dx = {}", x.get_gradient());
+
+        assert_eq!(x.get_gradient(), 1.0);
+        assert_eq!(y.get_gradient(), 1.0);
+    }
+
+    #[test]
+    fn simple_subtraction_on_values(){
+        let x = Value::new(11);
+        let w = Value::new(2);
+
+        let x_1 = x.clone();
+
+        let y = x - w;
+        
+        assert_eq!(y.get_data(), 9);
 
         println!("⭐️ {:?}", y);
 
+        y.set_gradient(1.0);
         y.backward();
 
         println!("⭐️ {:?}", y);
-        
-        println!("dy/dx = {}", x.borrow().gradient)
+
+        assert_eq!(x_1.get_gradient(), 1.0);
+    }
 
 
-        // let a = &value::Value::new(1.0);
-        // let b = &value::Value::new(2.0);
-        //
-        // let addition_op = a + b;
-        // assert_eq!(addition_op.data, 3.0);
-        //
-        // let subtraction_op = a - b;
-        // assert_eq!(subtraction_op.data, -1.0);
-        //
-        // let multiplication_op = a * b;
-        // assert_eq!(multiplication_op.data, 2.0);
-        //
-        // let division_op = a / b;
-        // assert_eq!(division_op.data, 0.5);
+    #[test]
+    fn subtraction_references(){
+        let x = &Value::new(50.5);
+        let w = &Value::new(20.0);
+
+        let y = x - w;
+
+        let z = &y - &Value::new(0.5);
+        assert_eq!(z.get_data(), 30.0);
+
+        z.set_gradient(1.0);
+
+        z.backward();
+        y.backward();
+
+        println!("⭐️ {:?}", z);
+        println!("⭐️ {:?}", y);
+
+        println!("dz/dx = {}", x.get_gradient());
+
+        assert_eq!(x.get_gradient(), 1.0);
+        assert_eq!(y.get_gradient(), 1.0);
     }
 
     // #[test]
