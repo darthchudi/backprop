@@ -66,7 +66,7 @@ pub struct InnerValue<T> {
     // the relationship might be inverted here for modelling reasons, which I'll be exploring further.
     pub ancestors: Vec<Value<T>>,
 
-    pub ancestors_rc: Vec<Rc<Value<T>>>,
+    pub ancestors_rc: Vec<Rc<RefCell<InnerValue<T>>>>,
 
     // gradient is the gradient of this value relative to it's "parent" nodes
     // i.e for an equation y = 1 + x.
@@ -95,10 +95,10 @@ impl<T: fmt::Debug> fmt::Debug for InnerValue<T> {
 
 // Value is a tuple struct which wraps an InnerValue
 #[derive(Debug, Clone)]
-pub struct Value<T>(RefCell<InnerValue<T>>);
+pub struct Value<T>(Rc<RefCell<InnerValue<T>>>);
 
 impl<T> Deref for Value<T> {
-    type Target = RefCell<InnerValue<T>>;
+    type Target = Rc<RefCell<InnerValue<T>>>;
 
     fn deref(&self) -> &Self::Target { 
         &self.0
@@ -115,7 +115,7 @@ impl<T: Copy> Value<T> {
             symbol: "",
         };
 
-        Value(RefCell::new(inner_value))
+        Value(Rc::new(RefCell::new(inner_value)))
     }
 
     pub fn backward(&self) {
@@ -211,20 +211,9 @@ impl<'a, T: Add<Output=T> + Copy + 'static> Add for &'a Value<T> {
         let mut ancestors = vec![self.clone(), rhs.clone()];
         value.borrow_mut().ancestors.append(&mut ancestors);
 
+        // Store information about the symbol
         value.borrow_mut().symbol = "+";
-
-        let ancestors_clone = value.borrow().ancestors.clone();
-
-        let left_ancestor = value.borrow().ancestors[0].clone();
-        let right_ancestor = value.borrow().ancestors[0].clone();
-
-        let _ = move || {
-            left_ancestor.borrow_mut().gradient += 1.0;
-            right_ancestor.borrow_mut().gradient += 1.0;
-        };
-
-        //    value.borrow_mut()._backward = CloneableFn::new(backward);
-
+        
         value
     }
 }
