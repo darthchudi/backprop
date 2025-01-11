@@ -40,23 +40,24 @@ impl Neuron {
 
     // Performs the forward pass on a given input and returns the activation
     fn forward(&self, x: &Vec<f64>) -> f64 {
-        let mut weight_sum = Value::new(0.0);
-
-        if x.len() != self.weights.len() {
-            panic!("{}", format!("{} input dimensions not compatible with {} weight dimensions", x.len(), self.weights.len()));
-        }
-
         // Compute the weighted sum of inputs for the neuron.
-        for (index, input_val) in x.iter().enumerate() {
-            let computed_val = self.weights[index]  * Value::new_from_ref(input_val);  // Wi * Xi
-            weight_sum = weight_sum + computed_val; // Sum(WnXn)
-        }
+        let weighted_sum = self.weights.
+            iter().
+            zip(x).
+            map(|(w, input)| {
+                let input_dim = &Value::new_from_ref(input);
+                
+                w * input_dim
+            }).
+            fold(Value::new(0.0), |acc, item| {
+                acc + item
+            });
+        
+        let weight_and_bias = &weighted_sum + &self.bias;
 
-        let weight_and_bias = weight_sum + self.bias;
+        let activation = Neuron::relu(weight_and_bias.get_data());
 
-        let activation = Neuron::relu(weight_and_bias.val());
-
-        activation
+         activation
     }
 }
 
@@ -109,5 +110,28 @@ impl Network {
         }
 
         result
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{network};
+
+    #[test]
+    fn simple_network() {
+        let network = network::Network{
+            layers: vec![
+                network::Layer::new(3, 4),
+                network::Layer::new(4, 5),
+                network::Layer::new(5, 100),
+                network::Layer::new(100, 1),
+            ],
+        };
+
+        let inputs = vec![0.1, 0.2, 0.3];
+
+        let output = network.forward(&inputs);
+        
+        println!("{:?}", output);
     }
 }
