@@ -15,6 +15,7 @@ fn main(){
     
     let y = x + w;
     
+    // Computes gradients for the computation graph
     y.backward();
 }
 ```

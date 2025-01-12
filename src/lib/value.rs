@@ -4,6 +4,16 @@ use std::rc::Rc;
 use std::cell::RefCell;
 use std::collections::HashMap;
 
+// ValueOp represents an arithmetic operation that can be performed on 1 or more Value types.
+#[derive(Debug, Clone)]
+pub enum ValueOp {
+    Addition,
+    Subtraction,
+    Multiplication,
+    Division,
+    None,
+}
+
 // InnerValue represents the inner contents of a Value object in a computation graph.
 // A given InnerValue will have references to the nodes which created it, which are referred to as ancestors.
 // By maintaining a reference to its ancestors and only generating the gradients when the backward pass is lazily
@@ -13,7 +23,7 @@ use std::collections::HashMap;
 // InnerValue.data = 20
 // InnerValue.ancestors = Vec<Rc<RefCell<InnerValue<10>>>, Rc<RefCell<InnerValue<10>>>>
 // InnerValue.gradient = 0
-// InnerValue.symbol = "+"
+// InnerValue.operation = Addition
 #[derive(Clone)]
 pub struct InnerValue<T> {
     // data represents the scalar value
@@ -31,7 +41,7 @@ pub struct InnerValue<T> {
     // The gradient of a given node is relative to the value it creates in a given equation
     pub gradient: f64,
     
-    pub symbol: &'static str,
+    pub operation: ValueOp,
 
     pub id: &'static str,
 }
@@ -43,7 +53,7 @@ impl<T: fmt::Debug> fmt::Debug for InnerValue<T> {
             .field("data", &self.data)
             .field("ancestors", &self.ancestors)
             .field("gradient", &self.gradient)
-            .field("symbol", &self.symbol)
+            .field("operation", &self.operation)
             .finish()
     }
 }
@@ -55,7 +65,7 @@ impl<T: fmt::Display + fmt::Debug> fmt::Display for InnerValue<T> {
             .field("data", &self.data)
             .field("ancestors", &self.ancestors)
             .field("gradient", &self.gradient)
-            .field("symbol", &self.symbol)
+            .field("operation", &self.operation)
             .finish()
     }
 }
@@ -82,15 +92,16 @@ impl<T> Deref for Value<T> {
 }
 
 impl<T> Value<T>
-where T: Copy + Mul<f64, Output = f64> + Into<f64> + From<f64> + fmt::Display + fmt::Debug
+where T: Copy + Mul<f64, Output = f64> + Into<f64> + From<f64> +  Div<T, Output = T> + Into<f64> + From<f64> + fmt::Display + fmt::Debug  + 'static
 {
     pub fn new(data: T) -> Value<T> {
         let inner_value = InnerValue {
             data,
             gradient: 0.0,
             ancestors: vec![],
-            symbol: "init",
             id: "",
+            operation: ValueOp::None,
+            
         };
 
         Value(Rc::new(RefCell::new(inner_value)))
@@ -113,22 +124,22 @@ where T: Copy + Mul<f64, Output = f64> + Into<f64> + From<f64> + fmt::Display + 
     pub fn backward(&self) {
         let val = self.borrow();
 
-        match val.symbol{
-            "+" => {
+        match val.operation{
+            ValueOp::Addition => {
                 let left_ancestor = &val.ancestors[0];
                 let right_ancestor = &val.ancestors[1];
 
                 left_ancestor.borrow_mut().gradient += 1.0 * val.gradient;
                 right_ancestor.borrow_mut().gradient += 1.0 * val.gradient;
             },
-            "-" => {
+            ValueOp::Subtraction => {
                 let left_ancestor = &val.ancestors[0];
                 let right_ancestor = &val.ancestors[1];
 
                 left_ancestor.borrow_mut().gradient += 1.0 * val.gradient;
                 right_ancestor.borrow_mut().gradient -= 1.0 * val.gradient;
             }
-            "*" => {
+            ValueOp::Multiplication=> {
                 let left_ancestor = &val.ancestors[0];
                 let right_ancestor = &val.ancestors[1];
 
@@ -138,7 +149,7 @@ where T: Copy + Mul<f64, Output = f64> + Into<f64> + From<f64> + fmt::Display + 
                 left_ancestor.borrow_mut().gradient += right_ancestor_data * val.gradient;
                 right_ancestor.borrow_mut().gradient += left_ancestor_data * val.gradient;
             }
-            "/" => {
+            ValueOp::Division => {
                 let left_ancestor = &val.ancestors[0];
                 let right_ancestor = &val.ancestors[1];
 
@@ -149,6 +160,25 @@ where T: Copy + Mul<f64, Output = f64> + Into<f64> + From<f64> + fmt::Display + 
                 right_ancestor.borrow_mut().gradient -= (left_ancestor_data/(right_ancestor_data * right_ancestor_data)) * val.gradient;
             }
             _ => ()
+        }
+    }
+
+    // run_grad builds a topological graph of computations and then performs the backpropagation algorithm
+    // to update the derivatives of nodes in the computation graph.
+    // The given node is taken as the start node from which the dependencies in the graph are built.
+    pub fn run_grad(&self){
+        // Set the initial gradient for the root node.
+        self.set_gradient(1.0);
+
+        let topological_graph = build_topological_graph(self);
+
+        // reverse the topological graph because we want the computed gradients to flow backwards to ancestors
+        let reversed_topological_graph: Vec<&Rc<RefCell<InnerValue<T>>>> = topological_graph.iter().rev().collect();
+
+        // Compute the gradient for nodes in the graph
+        for node in reversed_topological_graph {
+            let node_as_value = Value(Rc::clone(node));
+            node_as_value.backward();
         }
     }
 
@@ -218,29 +248,8 @@ where T: Div<Output=T> + Copy + 'static + Mul<f64, Output = f64> + Into<f64> + F
         println!("{}", item.borrow());
     }
 }
-
-// run_grad builds a topological graph of computations and then performs the backpropagation algorithm
-// to update the derivatives of nodes in the computation graph.
-pub fn run_grad<T>(value: &Value<T>)
-where T: Div<Output=T> + Copy + 'static + Mul<f64, Output = f64> + Into<f64> + From<f64> + fmt::Display + fmt::Debug
-{
-    // Set the initial gradient for the root node.
-    value.set_gradient(1.0);
-
-    let topological_graph = build_topological_graph(value);
-
-    // reverse the topological graph because we want the computed gradients to flow backwards to ancestors
-    let reversed_topological_graph: Vec<&Rc<RefCell<InnerValue<T>>>> = topological_graph.iter().rev().collect();
-
-    // Compute the gradient for nodes in the graph
-    for node in reversed_topological_graph {
-        let node_as_value = Value(Rc::clone(node));
-        node_as_value.backward();
-    }
-}
-
 impl<T> Add for Value<T>
-where T: Add<Output=T> + Copy + 'static + Mul<f64, Output = f64> + Into<f64> + From<f64> + fmt::Display + fmt::Debug
+where T: Add<Output=T> + Copy + 'static + Mul<f64, Output = f64> + Into<f64> + Into<f64> + From<f64> + fmt::Display + fmt::Debug  + Div<T, Output = T>
 {
     type Output = Self;
 
@@ -252,14 +261,14 @@ where T: Add<Output=T> + Copy + 'static + Mul<f64, Output = f64> + Into<f64> + F
         let mut ancestors = vec![Rc::clone(&self), Rc::clone(&rhs)];
         value.borrow_mut().ancestors.append(&mut ancestors);
 
-        value.borrow_mut().symbol = "+";
+        value.borrow_mut().operation = ValueOp::Addition;
         
         value
     }
 }
 
 impl<T> Add for &Value<T>
-where T: Add<Output=T> + Copy + 'static + Mul<f64, Output = f64> + Into<f64> + From<f64> + fmt::Display + fmt::Debug
+where T: Add<Output=T> + Copy + 'static + Mul<f64, Output = f64> + Into<f64> + From<f64> + fmt::Display + fmt::Debug  + Div<T, Output = T>
 {
     type Output = Value<T>;
 
@@ -271,7 +280,7 @@ where T: Add<Output=T> + Copy + 'static + Mul<f64, Output = f64> + Into<f64> + F
         let mut ancestors = vec![Rc::clone(&self), Rc::clone(&rhs)];
         value.borrow_mut().ancestors.append(&mut ancestors);
 
-        value.borrow_mut().symbol = "+";
+        value.borrow_mut().operation = ValueOp::Addition;
 
         value
     }
@@ -279,7 +288,7 @@ where T: Add<Output=T> + Copy + 'static + Mul<f64, Output = f64> + Into<f64> + F
 
 
 impl<T> Sub for Value<T>
-where T: Sub<Output=T> + Copy + 'static + Mul<f64, Output = f64> + Into<f64> + From<f64> + fmt::Display + fmt::Debug
+where T: Sub<Output=T> + Copy + 'static + Mul<f64, Output = f64> + Into<f64> + From<f64> + fmt::Display + fmt::Debug + Div<T, Output = T>
 {
     type Output = Self;
 
@@ -291,7 +300,7 @@ where T: Sub<Output=T> + Copy + 'static + Mul<f64, Output = f64> + Into<f64> + F
         let mut ancestors = vec![Rc::clone(&self), Rc::clone(&rhs)];
         value.borrow_mut().ancestors.append(&mut ancestors);
 
-        value.borrow_mut().symbol = "-";
+        value.borrow_mut().operation = ValueOp::Subtraction; 
 
         value
     }
@@ -299,7 +308,7 @@ where T: Sub<Output=T> + Copy + 'static + Mul<f64, Output = f64> + Into<f64> + F
 
 
 impl<T> Sub for &Value<T>
-where T: Sub<Output=T> + Copy + 'static + Mul<f64, Output = f64> + Into<f64> + From<f64> + fmt::Display + fmt::Debug
+where T: Sub<Output=T> + Copy + 'static + Mul<f64, Output = f64> + Into<f64> + From<f64> + fmt::Display + fmt::Debug + Div<T, Output = T>
 {
     type Output = Value<T>;
 
@@ -311,14 +320,14 @@ where T: Sub<Output=T> + Copy + 'static + Mul<f64, Output = f64> + Into<f64> + F
         let mut ancestors = vec![Rc::clone(&self), Rc::clone(&rhs)];
         value.borrow_mut().ancestors.append(&mut ancestors);
 
-        value.borrow_mut().symbol = "-";
+        value.borrow_mut().operation = ValueOp::Subtraction;
 
         value
     }
 }
 
 impl<T> Mul for Value<T>
-where T: Mul<Output=T> + Copy + 'static + Mul<f64, Output = f64> + Into<f64> + From<f64> + fmt::Display + fmt::Debug
+where T: Mul<Output=T> + Copy + 'static + Mul<f64, Output = f64> + Into<f64> + From<f64> + fmt::Display + fmt::Debug + Div<T, Output = T>
 {
     type Output = Self;
 
@@ -330,14 +339,14 @@ where T: Mul<Output=T> + Copy + 'static + Mul<f64, Output = f64> + Into<f64> + F
 
         value.borrow_mut().ancestors.append(&mut ancestors);
 
-        value.borrow_mut().symbol = "*";
+        value.borrow_mut().operation = ValueOp::Multiplication;
 
         value
     }
 }
 
 impl<T> Mul for &Value<T>
-where T: Mul<Output=T> + Copy + 'static + Mul<f64, Output = f64> + Into<f64> + From<f64> + fmt::Display + fmt::Debug
+where T: Mul<Output=T> + Copy + 'static + Mul<f64, Output = f64> + Into<f64> + From<f64> + fmt::Display + fmt::Debug + Div<T, Output = T>
 {
     type Output = Value<T>;
 
@@ -349,7 +358,7 @@ where T: Mul<Output=T> + Copy + 'static + Mul<f64, Output = f64> + Into<f64> + F
 
         value.borrow_mut().ancestors.append(&mut ancestors);
 
-        value.borrow_mut().symbol = "*";
+        value.borrow_mut().operation = ValueOp::Multiplication;
 
         value
     }
@@ -368,7 +377,7 @@ where T: Div<Output=T> + Copy + 'static + Mul<f64, Output = f64> + Into<f64> + F
         let mut ancestors = vec![Rc::clone(&self), Rc::clone(&rhs)];
         value.borrow_mut().ancestors.append(&mut ancestors);
 
-        value.borrow_mut().symbol = "/";
+        value.borrow_mut().operation = ValueOp::Division;
 
         value
     }
@@ -387,7 +396,7 @@ where T: Div<Output=T> + Copy + 'static + Mul<f64, Output = f64> + Into<f64> + F
         let mut ancestors = vec![Rc::clone(&self), Rc::clone(&rhs)];
         value.borrow_mut().ancestors.append(&mut ancestors);
 
-        value.borrow_mut().symbol = "/";
+        value.borrow_mut().operation = ValueOp::Division;
 
         value
     }
@@ -395,7 +404,7 @@ where T: Div<Output=T> + Copy + 'static + Mul<f64, Output = f64> + Into<f64> + F
 
 #[cfg(test)]
 mod tests {
-    use crate::value::{build_topological_graph, run_grad, Value};
+    use crate::value::{build_topological_graph, Value};
 
     #[test]
     fn simple_addition_on_values(){
@@ -418,7 +427,7 @@ mod tests {
 
         // Set the gradient for z and calculate the gradient
         // We start from z as it's the root node.
-        run_grad(&z);
+        z.run_grad();
 
         assert_eq!(x_clone.borrow().gradient, 1.0);
         assert_eq!(y_clone.borrow().gradient, 1.0);
@@ -433,7 +442,7 @@ mod tests {
 
         let z = &y + &Value::new(10.0);
 
-        run_grad(&z);
+        z.run_grad();
 
         assert_eq!(x.get_gradient(), 1.0);
         assert_eq!(y.get_gradient(), 1.0);
@@ -450,7 +459,7 @@ mod tests {
 
         assert_eq!(y.get_data(), 9.0);
 
-        run_grad(&y);
+        y.run_grad();
 
         assert_eq!(x_1.get_gradient(), 1.0);
     }
@@ -465,7 +474,7 @@ mod tests {
         let z = &y - &Value::new(0.5);
         assert_eq!(z.get_data(), 30.0);
 
-        run_grad(&z);
+       z.run_grad();
         
         assert_eq!(x.get_gradient(), 1.0);
         assert_eq!(y.get_gradient(), 1.0);
@@ -481,7 +490,7 @@ mod tests {
 
         let y = x * w;
         
-        run_grad(&y);  
+        y.run_grad();
 
         assert_eq!(x_1.get_gradient(), 20.0);
         assert_eq!(w_1.get_gradient(), 10.0);
@@ -496,8 +505,8 @@ mod tests {
 
         assert_eq!(y.get_data(), 200.0);
         assert_eq!(x.get_gradient(), 0.0);
-        
-        run_grad(&y);
+
+        y.run_grad();
         
         assert_eq!(x.get_gradient(), 20.0);
         assert_eq!(w.get_gradient(), 10.0);
@@ -516,7 +525,7 @@ mod tests {
         assert_eq!(y.get_data(), 50.0);
         assert_eq!(x_1.get_gradient(), 0.0);
 
-        run_grad(&y);
+        y.run_grad();
         
         assert_eq!(x_1.get_gradient(), 0.5);
         assert_eq!(w_1.get_gradient(), -25.0);
@@ -532,7 +541,7 @@ mod tests {
         assert_eq!(y.get_data(), 50.0);
         assert_eq!(x.get_gradient(), 0.0);
 
-        run_grad(&y);
+        y.run_grad();
 
         assert_eq!(x.get_gradient(), 0.5);
         assert_eq!(w.get_gradient(), -25.0);
@@ -548,7 +557,7 @@ mod tests {
         let d = c.clone() * b.clone();       // d = c * b = 12
         let z = d.clone() / a.clone();       // z = d / a = 3
         
-        run_grad(&z);
+        z.run_grad();
 
         assert_eq!(a.borrow().gradient, -0.25, "Expected a.gradient to be -0.25");
         assert_eq!(b.borrow().gradient, 2.0, "Expected b.gradient to be 2.0");
@@ -595,7 +604,7 @@ mod tests {
         assert_eq!(d.borrow().data, 5.0, "Expected d.data to be 5.0");
         assert_eq!(z.borrow().data, 5.0 / 3.0, "Expected z.data to be 5.0 / 3.0");
 
-        run_grad(&z);
+        z.run_grad();
 
         // Backward pass checks
         assert_eq!(z.borrow().gradient, 1.0, "z.gradient should be 1.0");
