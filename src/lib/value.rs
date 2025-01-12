@@ -93,7 +93,7 @@ impl<T> Deref for Value<T> {
 }
 
 impl<T> Value<T>
-where T: Copy + Mul<f64, Output = f64> + Into<f64> + From<f64> +  Div<T, Output = T> + Into<f64> + From<f64> + fmt::Display + fmt::Debug  + 'static
+where T: Copy + Mul<f64, Output = f64> + Div<T, Output = T> + Into<f64> + From<f64> + fmt::Display + fmt::Debug  + 'static
 {
     fn generate_id() -> String {
         let mut rng = rand::thread_rng();
@@ -222,9 +222,7 @@ pub fn build_topological_graph<T>(value: &Value<T>) -> Vec<Rc<RefCell<InnerValue
 where T: Div<Output=T> + Copy + 'static + Mul<f64, Output = f64> + Into<f64> + From<f64> + fmt::Display + fmt::Debug {
     let mut seen_nodes: HashMap<String, bool> = HashMap::new();
 
-    let topological_graph = order_nodes_topologically(&value, &mut seen_nodes);
-
-    topological_graph
+    order_nodes_topologically(value, &mut seen_nodes)
 }
 
 // order_nodes_topologically returns a topologically ordered set of ancestor nodes for a given node.
@@ -265,7 +263,7 @@ where T: Div<Output=T> + Copy + 'static + Mul<f64, Output = f64> + Into<f64> + F
     }
 }
 impl<T> Add for Value<T>
-where T: Add<Output=T> + Copy + 'static + Mul<f64, Output = f64> + Into<f64> + Into<f64> + From<f64> + fmt::Display + fmt::Debug  + Div<T, Output = T>
+where T: Add<Output=T> + Copy + 'static + Mul<f64, Output = f64> + Div<T, Output = T> + Into<f64> + From<f64> + fmt::Display + fmt::Debug
 {
     type Output = Self;
 
@@ -284,7 +282,7 @@ where T: Add<Output=T> + Copy + 'static + Mul<f64, Output = f64> + Into<f64> + I
 }
 
 impl<T> Add for &Value<T>
-where T: Add<Output=T> + Copy + 'static + Mul<f64, Output = f64> + Into<f64> + From<f64> + fmt::Display + fmt::Debug  + Div<T, Output = T>
+where T: Add<Output=T> + Copy + 'static + Mul<f64, Output = f64> + Div<T, Output = T> + Into<f64> + From<f64> + fmt::Display + fmt::Debug
 {
     type Output = Value<T>;
 
@@ -293,7 +291,7 @@ where T: Add<Output=T> + Copy + 'static + Mul<f64, Output = f64> + Into<f64> + F
         let value = Value::new(result);
 
         // Set a reference to the ancestors
-        let mut ancestors = vec![Rc::clone(&self), Rc::clone(&rhs)];
+        let mut ancestors = vec![Rc::clone(self), Rc::clone(rhs)];
         value.borrow_mut().ancestors.append(&mut ancestors);
 
         value.borrow_mut().operation = ValueOp::Addition;
@@ -304,7 +302,7 @@ where T: Add<Output=T> + Copy + 'static + Mul<f64, Output = f64> + Into<f64> + F
 
 
 impl<T> Sub for Value<T>
-where T: Sub<Output=T> + Copy + 'static + Mul<f64, Output = f64> + Into<f64> + From<f64> + fmt::Display + fmt::Debug + Div<T, Output = T>
+where T: Sub<Output=T> + Copy + 'static + Mul<f64, Output = f64> + Into<f64> + Div<T, Output = T> + From<f64> + fmt::Display + fmt::Debug
 {
     type Output = Self;
 
@@ -324,7 +322,7 @@ where T: Sub<Output=T> + Copy + 'static + Mul<f64, Output = f64> + Into<f64> + F
 
 
 impl<T> Sub for &Value<T>
-where T: Sub<Output=T> + Copy + 'static + Mul<f64, Output = f64> + Into<f64> + From<f64> + fmt::Display + fmt::Debug + Div<T, Output = T>
+where T: Sub<Output=T> + Copy + 'static + Mul<f64, Output = f64> + Div<T, Output = T> + Into<f64> + From<f64> + fmt::Display + fmt::Debug
 {
     type Output = Value<T>;
 
@@ -333,7 +331,7 @@ where T: Sub<Output=T> + Copy + 'static + Mul<f64, Output = f64> + Into<f64> + F
         let value = Value::new(result);
 
         // Set a reference to the ancestors
-        let mut ancestors = vec![Rc::clone(&self), Rc::clone(&rhs)];
+        let mut ancestors = vec![Rc::clone(self), Rc::clone(rhs)];
         value.borrow_mut().ancestors.append(&mut ancestors);
 
         value.borrow_mut().operation = ValueOp::Subtraction;
@@ -343,7 +341,7 @@ where T: Sub<Output=T> + Copy + 'static + Mul<f64, Output = f64> + Into<f64> + F
 }
 
 impl<T> Mul for Value<T>
-where T: Mul<Output=T> + Copy + 'static + Mul<f64, Output = f64> + Into<f64> + From<f64> + fmt::Display + fmt::Debug + Div<T, Output = T>
+where T: Mul<Output=T> + Copy + 'static + Mul<f64, Output = f64> + Div<T, Output = T> + Into<f64> + From<f64> + fmt::Display + fmt::Debug
 {
     type Output = Self;
 
@@ -362,7 +360,7 @@ where T: Mul<Output=T> + Copy + 'static + Mul<f64, Output = f64> + Into<f64> + F
 }
 
 impl<T> Mul for &Value<T>
-where T: Mul<Output=T> + Copy + 'static + Mul<f64, Output = f64> + Into<f64> + From<f64> + fmt::Display + fmt::Debug + Div<T, Output = T>
+where T: Mul<Output=T> + Copy + 'static + Mul<f64, Output = f64> + Div<T, Output = T> + Into<f64> + From<f64> + fmt::Display + fmt::Debug
 {
     type Output = Value<T>;
 
@@ -370,7 +368,7 @@ where T: Mul<Output=T> + Copy + 'static + Mul<f64, Output = f64> + Into<f64> + F
         let result =  self.borrow().data * rhs.borrow().data;
         let value = Value::new(result);
 
-        let mut ancestors = vec![Rc::clone(&self), Rc::clone(&rhs)];
+        let mut ancestors = vec![Rc::clone(self), Rc::clone(rhs)];
 
         value.borrow_mut().ancestors.append(&mut ancestors);
 
@@ -409,7 +407,7 @@ where T: Div<Output=T> + Copy + 'static + Mul<f64, Output = f64> + Into<f64> + F
         let value = Value::new(result);
 
         // Set a reference to the ancestors
-        let mut ancestors = vec![Rc::clone(&self), Rc::clone(&rhs)];
+        let mut ancestors = vec![Rc::clone(self), Rc::clone(rhs)];
         value.borrow_mut().ancestors.append(&mut ancestors);
 
         value.borrow_mut().operation = ValueOp::Division;

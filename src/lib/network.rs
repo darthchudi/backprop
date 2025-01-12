@@ -82,7 +82,7 @@ impl Layer {
         let mut outputs = Vec::with_capacity(self.neurons.len());
 
         for neuron in &self.neurons{
-            let neuron_result = neuron.forward(&inputs);
+            let neuron_result = neuron.forward(inputs);
             outputs.push(neuron_result);
         }
 
@@ -101,7 +101,7 @@ impl Network {
         for (index, layer) in self.layers.iter().enumerate(){
             if index == 0 {
                 // The first layer receives the inputs directly
-                result = layer.forward(&inputs);
+                result = layer.forward(inputs);
                 continue
             }
 
