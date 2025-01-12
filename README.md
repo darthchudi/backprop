@@ -2,7 +2,7 @@
 
 ![Abacus illustration](docs/illustration.png)
 
-Backprop is an [automatic differentiation](https://en.wikipedia.org/wiki/Automatic_differentiation) implementation writen in Rust. 
+Backprop is an [automatic differentiation](https://en.wikipedia.org/wiki/Automatic_differentiation) implementation written in Rust. 
 
 It supports computing the gradients of nodes in a computation graph for basic math operations: `addition`, `subtraction`, `multiplication` and `division`.
 
