@@ -603,7 +603,7 @@ mod tests {
         assert_eq!(round_to_places(b.borrow().gradient, 2), 1.44, "b.gradient should be 1.44");
         assert_eq!(round_to_places(a.borrow().gradient, 2), -1.33, "a.gradient should be −1.33");
     }
-
+    
     fn round_to_places(value: f64, places: u32) -> f64 {
         let factor = 10f64.powi(places as i32);
         (value * factor).round() / factor
