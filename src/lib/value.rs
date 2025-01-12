@@ -3,6 +3,7 @@ use std::fmt;
 use std::rc::Rc;
 use std::cell::RefCell;
 use std::collections::HashMap;
+use rand::Rng;
 
 // ValueOp represents an arithmetic operation that can be performed on 1 or more Value types.
 #[derive(Debug, Clone)]
@@ -40,10 +41,10 @@ pub struct InnerValue<T> {
     // so x.gradient = 1
     // The gradient of a given node is relative to the value it creates in a given equation
     pub gradient: f64,
-    
+
     pub operation: ValueOp,
 
-    pub id: &'static str,
+    pub id: String,
 }
 
 impl<T: fmt::Debug> fmt::Debug for InnerValue<T> {
@@ -94,14 +95,24 @@ impl<T> Deref for Value<T> {
 impl<T> Value<T>
 where T: Copy + Mul<f64, Output = f64> + Into<f64> + From<f64> +  Div<T, Output = T> + Into<f64> + From<f64> + fmt::Display + fmt::Debug  + 'static
 {
+    fn generate_id() -> String {
+        let mut rng = rand::thread_rng();
+
+        let id_num: f64 = rng.gen_range(1.0.. 10000.0);
+        let id = format!("valueid_{}", id_num).replace(".", ""); // replace the decimal point
+
+        id.to_string()
+    }
+
     pub fn new(data: T) -> Value<T> {
+        let id = Self::generate_id();
+
         let inner_value = InnerValue {
+            id,
             data,
             gradient: 0.0,
             ancestors: vec![],
-            id: "",
             operation: ValueOp::None,
-            
         };
 
         Value(Rc::new(RefCell::new(inner_value)))
@@ -113,7 +124,7 @@ where T: Copy + Mul<f64, Output = f64> + Into<f64> + From<f64> +  Div<T, Output 
 
     pub fn new_with_id(data: T, id: &'static str) -> Value<T> {
         let value = Value::new(data);
-        value.borrow_mut().id = id;
+        value.borrow_mut().id = id.to_string();
 
         value
     }
@@ -194,6 +205,10 @@ where T: Copy + Mul<f64, Output = f64> + Into<f64> + From<f64> +  Div<T, Output 
         self.borrow_mut().gradient = gradient;
     }
 
+    pub fn get_id(&self) -> String {
+        self.borrow().id.clone()
+    }
+
     pub fn clear_gradient(&self) {
         self.borrow_mut().gradient = 0.0;
 
@@ -218,7 +233,8 @@ where T: Div<Output=T> + Copy + 'static + Mul<f64, Output = f64> + Into<f64> + F
 {
     let mut nodes = vec![];
 
-    let value_id = format!("{}", value.borrow());
+    let value_id = value.get_id();
+
     if seen_nodes.contains_key(&value_id) {
         return nodes;
     }
@@ -300,7 +316,7 @@ where T: Sub<Output=T> + Copy + 'static + Mul<f64, Output = f64> + Into<f64> + F
         let mut ancestors = vec![Rc::clone(&self), Rc::clone(&rhs)];
         value.borrow_mut().ancestors.append(&mut ancestors);
 
-        value.borrow_mut().operation = ValueOp::Subtraction; 
+        value.borrow_mut().operation = ValueOp::Subtraction;
 
         value
     }
@@ -578,7 +594,7 @@ mod tests {
         let expected_order = vec![4.0, 2.0, 6.0, 12.0, 3.0];
 
         let actual_order: Vec<f64> = topological_graph.iter().map(|n| n.borrow().data).collect();
-
+        
         assert_eq!(expected_order, actual_order);
     }
 
@@ -590,14 +606,14 @@ mod tests {
 
         // Perform chained operations
         let c = a.clone() + b.clone();               // c = a + b
-        c.borrow_mut().id = "c";
+        c.borrow_mut().id = "c".to_string();
 
 
         let d = c.clone() * (b.clone() - a.clone());  // d = c * (b - a)
-        d.borrow_mut().id = "d";
+        d.borrow_mut().id = "d".to_string();
 
         let z = d.clone() / b.clone();               // z = d / b
-        z.borrow_mut().id = "z";
+        z.borrow_mut().id = "z".to_string();
 
         // Forward pass checks
         assert_eq!(c.borrow().data, 5.0, "Expected c.data to be 5.0");
