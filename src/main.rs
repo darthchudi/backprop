@@ -1,7 +1,6 @@
 use backprop::{network};
 
 fn main (){
-   // 3 layer network.
     let network = network::Network{
         layers: vec![
             network::Layer::new(3, 4),
@@ -14,6 +13,4 @@ fn main (){
     let inputs = vec![0.1, 0.2, 0.3];
     
     let _ = network.forward(&inputs);
-
-    println!("Hi");
 }
