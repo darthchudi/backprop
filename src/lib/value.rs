@@ -5,7 +5,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use rand::Rng;
 
-// ValueOp represents an arithmetic operation that can be performed on 1 or more Value types.
+/// ValueOp represents an arithmetic operation that can be performed on 1 or more Value types.
 #[derive(Debug, Clone)]
 pub enum ValueOp {
     Addition,
@@ -15,16 +15,29 @@ pub enum ValueOp {
     None,
 }
 
-// InnerValue represents the inner contents of a Value object in a computation graph.
-// A given InnerValue will have references to the nodes which created it, which are referred to as ancestors.
-// By maintaining a reference to its ancestors and only generating the gradients when the backward pass is lazily
-// evaluated, a given value can propagate its own gradients backwards to its ancestors gradients when evaluated topologically.
-// For a given output y = w + x
-// where y is the output node, w = 10, x = 33; we'll get the following domain representation:
-// InnerValue.data = 20
-// InnerValue.ancestors = Vec<Rc<RefCell<InnerValue<10>>>, Rc<RefCell<InnerValue<10>>>>
-// InnerValue.gradient = 0
-// InnerValue.operation = Addition
+
+impl ValueOp {
+    pub fn to_str(&self) -> &'static str {
+        match self{
+            ValueOp::Addition => "+",
+            ValueOp::Subtraction => "-",
+            ValueOp::Multiplication => "*",
+            ValueOp::Division => "/",
+            ValueOp::None => "none",
+        } 
+    }
+}
+
+/// InnerValue represents the inner contents of a Value object in a computation graph.
+/// A given InnerValue will have references to the nodes which created it, which are referred to as ancestors.
+/// By maintaining a reference to its ancestors and only generating the gradients when the backward pass is lazily
+/// evaluated, a given value can propagate its own gradients backwards to its ancestors gradients when evaluated topologically.
+/// For a given output y = w + x
+/// where y is the output node, w = 10, x = 33; we'll get the following domain representation:
+/// InnerValue.data = 20
+/// InnerValue.ancestors = Vec<Rc<RefCell<InnerValue<10>>>, Rc<RefCell<InnerValue<10>>>>
+/// InnerValue.gradient = 0
+/// InnerValue.operation = Addition
 #[derive(Clone)]
 pub struct InnerValue<T> {
     // data represents the scalar value
@@ -71,8 +84,8 @@ impl<T: fmt::Display + fmt::Debug> fmt::Display for InnerValue<T> {
     }
 }
 
-// Value is a tuple struct which wraps an InnerValue
-// It provides support for auto-differentiable mathematical operations.
+/// Value is a tuple struct which wraps an InnerValue
+/// It provides support for auto-differentiable mathematical operations.
 #[derive(Debug, Clone)]
 pub struct Value<T>(Rc<RefCell<InnerValue<T>>>);
 
@@ -174,9 +187,9 @@ where T: Copy + Mul<f64, Output = f64> + Div<T, Output = T> + Into<f64> + From<f
         }
     }
 
-    // run_grad builds a topological graph of computations and then performs the backpropagation algorithm
-    // to update the derivatives of nodes in the computation graph.
-    // The given node is taken as the start node from which the dependencies in the graph are built.
+    /// run_grad builds a topological graph of computations and then performs the backpropagation algorithm
+    /// to update the derivatives of nodes in the computation graph.
+    /// The given node is taken as the start node from which the dependencies in the graph are built.
     pub fn run_grad(&self){
         // Set the initial gradient for the root node.
         self.set_gradient(1.0);
@@ -217,7 +230,7 @@ where T: Copy + Mul<f64, Output = f64> + Div<T, Output = T> + Into<f64> + From<f
     }
 }
 
-// order_nodes_topologically builds a topological order for nodes based on their dependencies.
+/// order_nodes_topologically builds a topological order for nodes based on their dependencies.
 pub fn build_topological_graph<T>(value: &Value<T>) -> Vec<Rc<RefCell<InnerValue<T>>>>
 where T: Div<Output=T> + Copy + 'static + Mul<f64, Output = f64> + Into<f64> + From<f64> + fmt::Display + fmt::Debug {
     let mut seen_nodes: HashMap<String, bool> = HashMap::new();
@@ -225,7 +238,7 @@ where T: Div<Output=T> + Copy + 'static + Mul<f64, Output = f64> + Into<f64> + F
     order_nodes_topologically(value, &mut seen_nodes)
 }
 
-// order_nodes_topologically returns a topologically ordered set of ancestor nodes for a given node.
+/// order_nodes_topologically returns a topologically ordered set of ancestor nodes for a given node.
 fn order_nodes_topologically<T>(value: &Value<T>, seen_nodes: &mut HashMap<String, bool>) -> Vec<Rc<RefCell<InnerValue<T>>>>
 where T: Div<Output=T> + Copy + 'static + Mul<f64, Output = f64> + Into<f64> + From<f64> + fmt::Display + fmt::Debug
 {
@@ -626,7 +639,7 @@ mod tests {
         assert_eq!(round_to_places(b.borrow().gradient, 2), 1.44, "b.gradient should be 1.44");
         assert_eq!(round_to_places(a.borrow().gradient, 2), -1.33, "a.gradient should be −1.33");
     }
-    
+
     fn round_to_places(value: f64, places: u32) -> f64 {
         let factor = 10f64.powi(places as i32);
         (value * factor).round() / factor
