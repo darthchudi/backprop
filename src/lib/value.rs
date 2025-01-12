@@ -15,7 +15,6 @@ pub enum ValueOp {
     None,
 }
 
-
 impl ValueOp {
     pub fn to_str(&self) -> &'static str {
         match self{
@@ -275,6 +274,7 @@ where T: Div<Output=T> + Copy + 'static + Mul<f64, Output = f64> + Into<f64> + F
         println!("{}", item.borrow());
     }
 }
+
 impl<T> Add for Value<T>
 where T: Add<Output=T> + Copy + 'static + Mul<f64, Output = f64> + Div<T, Output = T> + Into<f64> + From<f64> + fmt::Display + fmt::Debug
 {
