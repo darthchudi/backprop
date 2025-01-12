@@ -61,7 +61,7 @@ The outputted `dot` file can then be rendered into a `png` file by running the G
 dot -Tpng graph.dot -o graph.png
 ```
 
-Alternatively, the generated `dot` file can be viewed in an online Graphviz file render.
+Alternatively, the generated `dot` file can be viewed in an online Graphviz file renderer.
 
 ## Running tests
 
