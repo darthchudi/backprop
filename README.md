@@ -36,7 +36,7 @@ The above computation generates the below graph:
 
 ### Visualisation
 
-The implementation supports generating an output file of the computation graph through the use of GraphViz `dot` files.
+The implementation supports generating an output file of the computation graph through the use of Graphviz `dot` files.
 
 ```rust
 use backprop::{value};
@@ -61,7 +61,7 @@ The outputted `dot` file can then be rendered into a `png` file by running the G
 dot -Tpng graph.dot -o graph.png
 ```
 
-Alternatively, the generated `dot` file can be viewed in an onlinr GraphViz file render.
+Alternatively, the generated `dot` file can be viewed in an online Graphviz file render.
 
 ## Running tests
 
@@ -69,13 +69,13 @@ Alternatively, the generated `dot` file can be viewed in an onlinr GraphViz file
 cargo test
 ```
 
-## Todo
+## Improvements
 
 * Replace dynamically allocated `Vec<f64>` with `[f64]` arrays.
-* Add Benchmarks
+* Add benchmarks
 * Add MLP tests
 
 ## Acknowledgments
 
-1. This library was inspired by [Kaparthy's micrograd Python library](https://github.com/karpathy/micrograd).
+1. This library was inspired by [Karpathy's micrograd Python library](https://github.com/karpathy/micrograd).
 2. The [Rust documentation on Smart pointers](https://doc.rust-lang.org/book/ch15-00-smart-pointers.html) was really helpful in modelling the nodes within the graph.
